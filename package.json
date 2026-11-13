@@ -1,0 +1,23 @@
+{
+  "name": "sprout",
+  "version": "1.0.0",
+  "main": "index.js",
+  "repository": "https://github.com/LucasHT22/sprout.git",
+  "author": "Lucas Honda <88567622+LucasHT22@users.noreply.github.com>",
+  "license": "MIT",
+  "description": "A free AI helper for Sprig games that runs entirely in your browser.",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@mlc-ai/web-llm": "0.2.87",
+    "diff": "8"
+  },
+  "devDependencies": {
+    "typescript": "5.9",
+    "vite": "7"
+  }
+}

@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Sprout · AI help for Sprig games</title>
+    <meta name="description" content="A free AI helper for Sprig games that runs entirely in your browser." />
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' rx='3' fill='%2334d058'/><path d='M8 13V7M8 9C8 6 5 5 3 5c0 3 2 4 5 4M8 8c0-3 3-4 5-4 0 3-2 4-5 4' stroke='%23111' stroke-width='1.5' fill='none'/></svg>" />
+    <script>
+      try {
+        const t = localStorage.getItem("sprout-theme");
+        if (t) document.documentElement.dataset.theme = t;
+      } catch {}
+    </script>
+  </head>
+  <body>
+    <div class="shell">
+      <header class="topbar">
+        <a class="brand" href="./">sprig/<span>sprout</span></a>
+        <nav class="topbar-nav">
+          <a class="nav-link" href="https://sprig.hackclub.com/editor" target="_blank" rel="noopener">Open Sprig ↗</a>
+          <button class="theme-toggle" id="theme" type="button" title="Toggle theme" aria-label="Toggle theme">◐</button>
+        </nav>
+      </header>
+
+      <section class="hero">
+        <p class="eyebrow">Hack Club Sprig</p>
+        <h1>Sprout</h1>
+        <p class="muted lede">
+          An AI helper for your Sprig game. Paste your code, ask anything, and apply fixes.
+          The AI runs on your own computer, so it's free, private, and needs no account.
+        </p>
+      </section>
+
+      <div class="grid">
+        <main class="card wide">
+          <div class="section-head">
+            <div>
+              <p class="eyebrow">Step 1</p>
+              <h2>Your game</h2>
+            </div>
+            <span id="code-stats">0 lines</span>
+          </div>
+
+          <label class="field-label" for="code">Paste your code from the Sprig editor</label>
+          <textarea id="code" class="code" spellcheck="false" placeholder="const player = &quot;p&quot;&#10;&#10;setLegend(&#10;  [ player, bitmap`...` ]&#10;)&#10;..."></textarea>
+
+          <label class="field-label" for="error">Error message <span class="muted">(optional, the red text Sprig shows)</span></label>
+          <textarea id="error" class="code error-box" spellcheck="false" rows="2" placeholder="TypeError: Cannot read properties of undefined (reading 'x')"></textarea>
+
+          <div class="link-row">
+            <button class="button primary" id="copy" type="button">Copy code</button>
+            <button class="button secondary" id="undo" type="button" disabled>Undo last change</button>
+            <button class="button secondary" id="clear" type="button">Clear</button>
+          </div>
+
+          <section id="diff-wrap" class="diff-wrap" hidden>
+            <div class="check-group-head">
+              <h3>What changed</h3>
+              <span id="diff-stats"></span>
+            </div>
+            <pre id="diff" class="diff"></pre>
+          </section>
+        </main>
+
+        <aside class="side">
+          <section class="card panel">
+            <div class="section-head">
+              <div>
+                <p class="eyebrow">Step 2</p>
+                <h2>Pick a brain</h2>
+              </div>
+              <span id="gpu-status">checking GPU…</span>
+            </div>
+            <div id="tiers" class="tiers" role="radiogroup" aria-label="Model size"></div>
+            <button class="button primary wide-button" id="load" type="button">Load model</button>
+            <div id="progress" class="progress" hidden>
+              <div class="bar"><div id="bar-fill"></div></div>
+              <p id="progress-text" class="tiny muted"></p>
+            </div>
+            <p class="tiny muted">The first load downloads the model once, then it's saved in your browser.</p>
+          </section>
+
+          <section class="card panel chat-card">
+            <div class="section-head">
+              <div>
+                <p class="eyebrow">Step 3</p>
+                <h2>Ask Sprout</h2>
+              </div>
+              <button class="button small secondary" id="new-chat" type="button">New chat</button>
+            </div>
+            <div id="messages" class="messages" aria-live="polite">
+              <div class="msg assistant intro">
+                <p>Hi! I can explain your code, fix errors, and help add features like levels, enemies, or sounds. Load a model, paste your code, then ask away.</p>
+              </div>
+            </div>
+            <div class="chips" id="chips">
+              <button type="button" class="chip">Explain my code</button>
+              <button type="button" class="chip">Fix my error</button>
+              <button type="button" class="chip">Add a win condition</button>
+              <button type="button" class="chip">Add a second level</button>
+            </div>
+            <form id="ask" class="ask">
+              <textarea id="question" rows="2" placeholder="Why can my player walk through walls?"></textarea>
+              <button class="button primary" id="send" type="submit" disabled>Send</button>
+            </form>
+          </section>
+        </aside>
+      </div>
+
+      <p class="footer-note">Sprout is unofficial and not made by Hack Club. Models run in your browser with WebLLM · AI can be wrong, so test your game after every change · Ctrl+Enter to send</p>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
