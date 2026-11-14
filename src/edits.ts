@@ -15,9 +15,17 @@ const EDIT_RE =
 export function parseEdits(reply: string): Edit[] {
   const edits: Edit[] = [];
   for (const m of reply.matchAll(EDIT_RE)) {
-    edits.push({ search: m[1] ?? "", replace: m[2] ?? "" });
+    edits.push({ search: stripLineNumbers(m[1] ?? ""), replace: stripLineNumbers(m[2] ?? "") });
   }
   return edits;
+}
+
+function stripLineNumbers(text: string): string {
+  const lines = text.split("\n");
+  const numbered = /^\s*\d+ \| ?/;
+  const nonEmpty = lines.filter((l) => l.trim());
+  if (!nonEmpty.length || !nonEmpty.every((l) => numbered.test(l))) return text;
+  return lines.map((l) => l.replace(numbered, "")).join("\n");
 }
 
 export function parseFullCode(reply: string): string | null {

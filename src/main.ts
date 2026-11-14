@@ -1,7 +1,8 @@
 import "./style.css";
 import { diffLines } from "diff";
 import { applyEdits, parseEdits, parseFullCode, type Edit } from "./edits";
-import { buildUserMessage, type Turn } from "./prompt";
+import { lint } from "./lint";
+import { buildUserMessage, LADDER_QUESTIONS, type Level, type Stage, type Turn } from "./prompt";
 import {
   ask, checkGpu, currentModel, DEFAULT_TIER, isCached, loadModel, modelIdFor, stop, TIERS,
   type GpuInfo,
@@ -33,7 +34,7 @@ const newChatBtn = $<HTMLButtonElement>("new-chat");
 
 const store = {
   get(k: string) { try { return localStorage.getItem(k); } catch { return null; } },
-  set(k: string, v: string) { try { localStorage.setItem(k, v); } catch {  } },
+  set(k: string, v: string) { try { localStorage.setItem(k, v); } catch { /* ignore */ } },
 };
 
 let gpu: GpuInfo = { ok: false, f16: false };
@@ -43,6 +44,15 @@ let history: Turn[] = [];
 const undoStack: string[] = [];
 let busy = false;
 let loading = false;
+let level: Level = store.get("sprout-level") === "some" ? "some" : "beginner";
+
+for (const input of document.querySelectorAll<HTMLInputElement>('input[name="level"]')) {
+  input.checked = input.value === level;
+  input.addEventListener("change", () => {
+    level = input.value === "some" ? "some" : "beginner";
+    store.set("sprout-level", level);
+  });
+}
 
 $("theme").addEventListener("click", () => {
   const root = document.documentElement;
@@ -257,9 +267,18 @@ newChatBtn.addEventListener("click", () => {
   for (const el of messagesEl.querySelectorAll(".msg:not(.intro)")) el.remove();
 });
 
-async function send(raw: string) {
+const STAGE_LABEL: Record<Stage, string> = {
+  nudge: "🔍 Nudge",
+  hint: "💡 Hint",
+  point: "📍 Where it is",
+  show: "✅ Answer",
+};
+
+async function send(raw: string, stage: Stage = "nudge") {
   const question = raw.trim();
   if (!question || busy || !currentModel()) return;
+
+  for (const el of messagesEl.querySelectorAll(".ladder")) el.remove();
 
   questionEl.value = "";
   addMessage("user", `<p>${esc(question)}</p>`);
@@ -270,17 +289,23 @@ async function send(raw: string) {
   updateSend();
   updateLoadButton();
 
-  const codeAtAsk = codeEl.value;
-  const userMessage = buildUserMessage(question, codeAtAsk, errorEl.value);
+  const findings = lint(codeEl.value);
+  const userMessage = buildUserMessage({
+    question, code: codeEl.value, error: errorEl.value, findings, stage, level,
+  });
+  const tag = `<span class="stage-tag">${STAGE_LABEL[stage]}</span>`;
+  const reveal = stage === "show";
 
   let reply = "";
   try {
     reply = await ask(history, userMessage, (text) => {
-      bubble.innerHTML = renderReply(text);
+      bubble.innerHTML = tag + renderReply(text, reveal);
       scrollDown();
     });
-    bubble.innerHTML = renderReply(reply) || "<p class='muted'>(no answer)</p>";
-    addActions(bubble, reply);
+    bubble.innerHTML = tag + (renderReply(reply, reveal) || "<p class='muted'>(no answer)</p>");
+    addLineLink(bubble, reply, stage);
+    if (reveal) addActions(bubble, reply);
+    else addLadder(bubble, stage);
     history.push({ role: "user", content: question }, { role: "assistant", content: reply });
   } catch (e) {
     bubble.remove();
@@ -297,6 +322,51 @@ async function send(raw: string) {
     updateLoadButton();
     scrollDown();
   }
+}
+
+function addLadder(bubble: HTMLElement, stage: Stage) {
+  const next: Stage[] =
+    stage === "nudge" ? ["hint"] : stage === "hint" ? ["point", "show"] : stage === "point" ? ["show"] : [];
+  if (!next.length) return;
+
+  const row = document.createElement("div");
+  row.className = "ladder";
+  row.innerHTML = `<span class="label">Still stuck?</span>`;
+  const text: Record<Stage, string> = { nudge: "", hint: "💡 Hint", point: "📍 Where is it?", show: "✅ Show me" };
+  for (const s of next) {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "chip";
+    b.textContent = text[s];
+    b.addEventListener("click", () => send(LADDER_QUESTIONS[s as Exclude<Stage, "nudge">], s));
+    row.append(b);
+  }
+  bubble.append(row);
+}
+
+function addLineLink(bubble: HTMLElement, reply: string, stage: Stage) {
+  if (stage !== "point" && stage !== "show") return;
+  const m = reply.match(/\blines?\s+(\d+)/i);
+  if (!m) return;
+  const n = Number(m[1]);
+  const lines = codeEl.value.split("\n");
+  if (n < 1 || n > lines.length) return;
+
+  const b = document.createElement("button");
+  b.type = "button";
+  b.className = "button small secondary";
+  b.textContent = `Go to line ${n}`;
+  b.addEventListener("click", () => {
+    const start = lines.slice(0, n - 1).reduce((sum, l) => sum + l.length + 1, 0);
+    codeEl.focus();
+    codeEl.setSelectionRange(start, start + lines[n - 1]!.length);
+    const lineHeight = parseFloat(getComputedStyle(codeEl).lineHeight) || 18;
+    codeEl.scrollTop = Math.max(0, (n - 4) * lineHeight);
+  });
+  const row = document.createElement("div");
+  row.className = "msg-actions";
+  row.append(b);
+  bubble.append(row);
 }
 
 function addActions(bubble: HTMLElement, reply: string) {
@@ -362,15 +432,23 @@ function scrollDown() {
   messagesEl.scrollTop = messagesEl.scrollHeight;
 }
 
-function renderReply(text: string): string {
+function renderReply(text: string, reveal = true): string {
   const out: string[] = [];
+  let hid = false;
   const re = /(<{5,9} ?SEARCH[\s\S]*?(?:>{5,9} ?REPLACE|$)|```[\w]*\n[\s\S]*?(?:```|$))/g;
   let last = 0;
   for (const m of text.matchAll(re)) {
     out.push(renderProse(text.slice(last, m.index)));
     const block = m[0];
-    if (block.startsWith("<")) out.push(renderEdit(block));
-    else out.push(`<pre><code>${esc(block.replace(/^```[\w]*\n/, "").replace(/```$/, "").trimEnd())}</code></pre>`);
+    if (block.startsWith("<")) {
+      if (reveal) out.push(renderEdit(block));
+      else if (!hid) {
+        out.push(`<div class="hidden-answer">🙈 Sprout started writing the answer, so it's hidden. Press ✅ Show me when you're ready.</div>`);
+        hid = true;
+      }
+    } else {
+      out.push(`<pre><code>${esc(block.replace(/^```[\w]*\n/, "").replace(/```$/, "").trimEnd())}</code></pre>`);
+    }
     last = m.index! + block.length;
   }
   out.push(renderProse(text.slice(last)));

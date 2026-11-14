@@ -89,16 +89,21 @@
               </div>
               <button class="button small secondary" id="new-chat" type="button">New chat</button>
             </div>
+            <div class="level-switch" role="radiogroup" aria-label="Your coding level">
+              <label><input type="radio" name="level" value="beginner" /> I'm new to coding</label>
+              <label><input type="radio" name="level" value="some" /> I know some JavaScript</label>
+            </div>
             <div id="messages" class="messages" aria-live="polite">
               <div class="msg assistant intro">
-                <p>Hi! I can explain your code, fix errors, and help add features like levels, enemies, or sounds. Load a model, paste your code, then ask away.</p>
+                <p>Hi, I'm Sprout! I'll help you <strong>figure things out yourself</strong> instead of just handing you answers.</p>
+                <p>When you're stuck, I'll start with a nudge. If you need more, use 💡 Hint, 📍 Where is it?, and finally ✅ Show me.</p>
               </div>
             </div>
             <div class="chips" id="chips">
               <button type="button" class="chip">Explain my code</button>
-              <button type="button" class="chip">Fix my error</button>
-              <button type="button" class="chip">Add a win condition</button>
-              <button type="button" class="chip">Add a second level</button>
+              <button type="button" class="chip">Why doesn't my game work?</button>
+              <button type="button" class="chip">How do I add a second level?</button>
+              <button type="button" class="chip">What does setSolids do?</button>
             </div>
             <form id="ask" class="ask">
               <textarea id="question" rows="2" placeholder="Why can my player walk through walls?"></textarea>

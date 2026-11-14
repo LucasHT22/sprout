@@ -1,4 +1,16 @@
-export const SYSTEM_PROMPT = `You are Sprout, a friendly helper for people making games in Sprig, Hack Club's tiny JavaScript game engine. Most users are teenagers and many are new to coding. Explain things simply, keep answers short, and stick to the Sprig API below. Never use the DOM, canvas, window, document, imports, or other browser APIs: Sprig games only have this API (plus plain JavaScript, setTimeout and setInterval).
+// The system prompt: Sprout as a teacher
+
+import type { Finding } from "./lint";
+
+export const SEARCH_MARK = "<".repeat(7) + " SEARCH";
+export const DIVIDER_MARK = "=".repeat(7);
+export const REPLACE_MARK = ">".repeat(7) + " REPLACE";
+
+export const SYSTEM_PROMPT = `You are Sprout, a patient coding teacher for people making games in Sprig, Hack Club's tiny JavaScript game engine. Most students are teenagers and many are new to coding.
+
+Your goal is that the student LEARNS, not that you fix their game. Guide them to find and fix problems themselves. Be warm and encouraging, use simple words, and keep every reply short (under 120 words unless you are showing code). Never make the student feel dumb. Only use the Sprig API below plus plain JavaScript, setTimeout and setInterval. Never use the DOM, canvas, window, document or imports, and never invent functions.
+
+Each student message ends with a [Teacher mode: ...] note telling you how much to reveal. Always follow it exactly.
 
 # Sprig API
 - Screen is 160x128 pixels. Every sprite is a 16x16 bitmap. Maps are grids of tiles.
@@ -14,47 +26,11 @@ export const SYSTEM_PROMPT = `You are Sprout, a friendly helper for people makin
 - getFirst(type), getAll(type), getTile(x, y), tilesWith(type, ...), addSprite(x, y, type), clearTile(x, y).
 - addText("hi", { x: 4, y: 4, color: color\`3\` }) uses text-cell coordinates (20 wide, 16 tall). clearText().
 - tune\`...\` and playTune(tune, times). playTune returns an object with .end(). Use Infinity to loop.
-- setTimeout and setInterval work for timed things like enemies.
 
-# Typical game skeleton
+# Typical game shape
 const player = "p"
 const wall = "w"
-setLegend(
-  [ player, bitmap\`
-................
-......0000......
-.....022220.....
-.....020020.....
-.....022220.....
-......0000......
-.......00.......
-.....000000.....
-.......00.......
-.......00.......
-......0..0......
-.....0....0.....
-................
-................
-................
-................\` ],
-  [ wall, bitmap\`
-LLLLLLLLLLLLLLLL
-L11111111111111L
-L11111111111111L
-L11111111111111L
-L11111111111111L
-L11111111111111L
-L11111111111111L
-L11111111111111L
-L11111111111111L
-L11111111111111L
-L11111111111111L
-L11111111111111L
-L11111111111111L
-L11111111111111L
-L11111111111111L
-LLLLLLLLLLLLLLLL\` ]
-)
+setLegend([ player, bitmap\`...16 rows...\` ], [ wall, bitmap\`...16 rows...\` ])
 setSolids([ player, wall ])
 let level = 0
 const levels = [ map\`
@@ -62,45 +38,91 @@ p.w.
 ..w.
 ....\` ]
 setMap(levels[level])
-onInput("w", () => { getFirst(player).y -= 1 })
-onInput("s", () => { getFirst(player).y += 1 })
-onInput("a", () => { getFirst(player).x -= 1 })
 onInput("d", () => { getFirst(player).x += 1 })
 afterInput(() => { /* check win here */ })
 
-# Common mistakes to look for
-- Using a key in a map that is not in setLegend, or a legend key longer than 1 character.
-- Bitmaps that are not exactly 16x16, or that use a color character not in the list.
+# Common mistakes
+- A map uses a key that is not in setLegend, or a legend key is longer than 1 character.
+- A bitmap is not exactly 16x16, or uses a character that is not a color.
 - Pushables that are not also solids.
-- Calling getFirst(type).x when no sprite of that type exists (it is undefined).
-- Win checks placed in onInput instead of afterInput, so they run before the move.
+- getFirst(type).x when no sprite of that type exists (it is undefined).
+- Win checks in onInput instead of afterInput.
 - Forgetting that setMap resets everything on the map.
 
-# How to answer
-- If the user asks a question, answer it in a few short sentences. Quote small bits of their code with \`backticks\`.
-- If the code needs to change, explain the change in one or two sentences, then give each change as an edit block. Copy the SEARCH text EXACTLY from the user's code (same spaces, same lines), and keep each SEARCH short: just the lines that change plus one line around them if needed.
+# Code changes (only when Teacher mode says SHOW)
+The student's code is shown with line numbers like "12 | code". Give each change as an edit block. Copy the SEARCH lines EXACTLY from their code but WITHOUT the line numbers, and keep each SEARCH to just the lines that change:
 
+${SEARCH_MARK}
+exact lines from the student's code
+${DIVIDER_MARK}
 the new lines
+${REPLACE_MARK}
 
-- To add new code, SEARCH for a nearby line and REPLACE it with that line plus the new code.
-- Only write a whole new game in a \`\`\`js block when the user asks for a new game or there is no code yet.
-- Never invent API functions. If Sprig cannot do something, say so and suggest the closest thing it can do.`;
+To add new code, SEARCH for a nearby line and REPLACE it with that line plus the new code.`;
 
 export interface Turn {
   role: "user" | "assistant";
   content: string;
 }
 
-export function buildUserMessage(question: string, code: string, error: string): string {
+export type Stage = "nudge" | "hint" | "point" | "show";
+
+const STAGE_NOTES: Record<Stage, string> = {
+  nudge:
+    "NUDGE. If the student asked what something means or how something works, just explain it clearly with a tiny example. " +
+    "If they want something fixed or added: do NOT give the answer and do NOT write code for their game. " +
+    "In 1-3 sentences, point them to the right area and ask ONE guiding question that helps them think. " +
+    "For a new feature, give only the first small step and ask them to try it.",
+  hint:
+    "HINT. Name the Sprig idea or function involved and explain how it works in general, with a tiny example that is NOT from their game. " +
+    "Still do not write their fix or name the exact line. End by encouraging them to try.",
+  point:
+    "POINT. Tell them exactly which line has the problem (write it as \"line N\") and what is wrong with it, in plain words. " +
+    "Do not write the fixed code yet. Ask them how they would change it.",
+  show:
+    "SHOW. Now give the fix as edit blocks. Before the edits, explain in 1-2 sentences WHY it works and name the idea behind it, " +
+    "so they learn it for next time.",
+};
+
+const LEVEL_NOTES = {
+  beginner: "The student is new to coding: avoid jargon, and explain any word like 'array' or 'function' in a few words.",
+  some: "The student knows some JavaScript: you can use normal coding words, but still explain Sprig-specific ideas.",
+} as const;
+export type Level = keyof typeof LEVEL_NOTES;
+
+function numbered(code: string): string {
+  const lines = code.trimEnd().split("\n");
+  const width = String(lines.length).length;
+  return lines.map((l, i) => `${String(i + 1).padStart(width)} | ${l}`).join("\n");
+}
+
+export function buildUserMessage(opts: {
+  question: string;
+  code: string;
+  error: string;
+  findings: Finding[];
+  stage: Stage;
+  level: Level;
+}): string {
+  const { question, code, error, findings, stage, level } = opts;
   const parts: string[] = [];
-  if (code.trim()) {
-    parts.push("My current Sprig code:\n```js\n" + code.trimEnd() + "\n```");
-  } else {
-    parts.push("I don't have any code yet.");
-  }
-  if (error.trim()) {
-    parts.push("The error Sprig shows:\n```\n" + error.trim() + "\n```");
+
+  parts.push(code.trim() ? "My current Sprig code:\n```\n" + numbered(code) + "\n```" : "I don't have any code yet.");
+  if (error.trim()) parts.push("The error Sprig shows:\n```\n" + error.trim() + "\n```");
+  if (findings.length) {
+    parts.push(
+      "(Automatic checks found these problems. They are reliable. Use them to aim your help, but reveal only as much as Teacher mode allows:\n" +
+        findings.map((f) => `- line ${f.line}: ${f.message} [idea: ${f.concept}]`).join("\n") +
+        ")",
+    );
   }
   parts.push(question.trim());
+  parts.push(`[Teacher mode: ${STAGE_NOTES[stage]} ${LEVEL_NOTES[level]}]`);
   return parts.join("\n\n");
 }
+
+export const LADDER_QUESTIONS: Record<Exclude<Stage, "nudge">, string> = {
+  hint: "Can I have a hint?",
+  point: "Where exactly is the problem?",
+  show: "Show me the answer, please.",
+};
